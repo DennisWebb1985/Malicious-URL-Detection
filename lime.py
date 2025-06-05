@@ -1,15 +1,14 @@
-!pip install lime
-
 import os
 import random
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import joblib
+import numpy as np
+import pandas as pd
 import lime
 import matplotlib.pyplot as plt
-import pandas as pd
+import seaborn as sns
 
 from pathlib import Path
 from collections import Counter
@@ -30,10 +29,10 @@ Y_TEST_FILENAME = "y_test.npy"
 SEED = 42                              # 재현성
 N_BG_PER_CLASS = 100                   # 배경 데이터 샘플 개수
 NUM_LIME_FEATURES_GLOBAL = 10          # 전역 설명 특성 개수
-N_GLOBAL_PER_CLASS = 500               # 전역 설명 샘플 개수 by 클래스
+N_GLOBAL_PER_CLASS = 100               # 전역 설명 샘플 개수 by 클래스
 NUM_LIME_SAMPLES_GLOBAL = 1000         # 전역 설명 샘플 개수
 NUM_LIME_FEATURES_LOCAL = 10           # 지역 설명 특성 개수
-NUM_LIME_SAMPLES_LOCAL = 5000          # 지역 설명 샘플 개수
+NUM_LIME_SAMPLES_LOCAL = 1000          # 지역 설명 샘플 개수
 DISTANCE_METRIC_LIME = 'euclidean'     # 인스턴스 간 거리 계산 방법
 TARGET_CLASS_IDX_EXPLAIN = 1           # Malicious
 TOP_N_FOR_GLOBAL_VISUALIZATION = 20    # 전역 설명 특성 룰 개수
@@ -242,19 +241,6 @@ def generate_and_save_lime_explanation(
     # 경로 생성
     save_dir_path.mkdir(parents=True, exist_ok=True)
 
-    # 시각화: 단일 인스턴스에 대한 특성 기여도
-    try:
-        fig_auto = explanation.as_pyplot_figure(label=target_class_idx)
-        fig_auto.suptitle(f"LIME analysis for sample {instance_idx_str} (Actual: {actual_class_name}, Pred: {prob_malicious_title})\nExplaining class: {target_class_name}", fontsize=10, y=1.03)
-        plt.tight_layout()
-        auto_plot_path = save_dir_path / f"lime_analysis_plot_sample_{instance_idx_str}_exp_{target_class_name}.png"
-        fig_auto.savefig(auto_plot_path)
-        print(f"LIME analysis plot saved to: {auto_plot_path}")
-        plt.close(fig_auto)
-
-    except Exception as e:
-        print(f"Error generating LIME analysis plot for {instance_idx_str}: {e}")
-
     # 특성 기여도 결과
     explanation_list = explanation.as_list(label=target_class_idx)
     explanation_df = pd.DataFrame(explanation_list, columns=['feature_rule', 'weight'])
@@ -279,20 +265,34 @@ def generate_and_save_lime_explanation(
     explanation_df.to_csv(list_path, index=False)
     print(f"LIME feature contribution saved to: {list_path}")
 
-    top_n_features_for_plot = explanation_df.copy().iloc[::-1]            # 특성 기여도 복사 후 행 순서 반전
-    plt.figure(figsize=(10, max(6, len(top_n_features_for_plot) * 0.5)))  # 가중치 절댓값 기준 상위 N개 Features Rule
-    colors = ['red' if w < 0 else 'blue' for w in top_n_features_for_plot['weight']]
-    plt.barh(top_n_features_for_plot['feature_rule'], top_n_features_for_plot['weight'], color=colors)
-    plt.xlabel("features contribution")
-    plt.ylabel("features rule")
-    plt.title(f"Top {len(top_n_features_for_plot)} LIME features for sample {instance_idx_str} (Actual: {actual_class_name}, Pred: {prob_malicious_title})\nExplaining class: {target_class_name}", fontsize=10)
-    plt.axvline(0, color='grey', linewidth=0.8, linestyle='--')
+    # 시각화
+    top_n_features_for_plot = explanation_df.sort_values("weight")
+
+    sns.set_theme(style="whitegrid", context="talk", font_scale=0.9)
+    bar_colors = ['red' if w < 0 else 'blue' for w in top_n_features_for_plot['weight']]
+
+    fig, ax = plt.subplots(figsize=(10, max(6, len(top_n_features_for_plot) * 0.5)))
+
+    sns.barplot(data=top_n_features_for_plot, x="weight", y="feature_rule", hue="feature_rule", palette=bar_colors, dodge=False, ax=ax, legend=False, edgecolor=".6")
+
+    ax.axvline(0, color="grey", linewidth=0.8, linestyle="--")
+    ax.set_xlabel("Feature contribution weight")
+    ax.set_ylabel("Feature rule")
+    ax.set_title(
+        f"Top {len(top_n_features_for_plot)} LIME features for sample {instance_idx_str} "
+        f"(Actual: {actual_class_name}, Pred: {prob_malicious_title})\n"
+        f"Explaining class: {target_class_name}",
+        fontsize=10
+    )
+
+    sns.despine(left=True, bottom=True)
     plt.tight_layout()
 
-    custom_plot_path = save_dir_path / f"lime_top_features_sample_{instance_idx_str}_exp_{target_class_name}.png"
-    plt.savefig(custom_plot_path)
+    custom_plot_path = (save_dir_path / f"lime_top_features_sample_{instance_idx_str}_exp_{target_class_name}.png")
+    fig.savefig(custom_plot_path, dpi=300, bbox_inches="tight")
     print(f"LIME top features chart saved to: {custom_plot_path}")
-    plt.close()
+    plt.close(fig)
+
     return explanation_df, explanation_list
 
 if __name__ == "__main__":
@@ -379,6 +379,7 @@ if __name__ == "__main__":
 
     print("\nGenerating LIME explanations for individual samples")
 
+    # 악성 샘플에 대한 LIME 분석
     if x_pos is not None and idx_pos_one is not None:
         generate_and_save_lime_explanation(
             instance_vector=x_pos, instance_idx_str=str(idx_pos_one),
@@ -390,6 +391,7 @@ if __name__ == "__main__":
             save_dir_path=RESULTS_LIME_DIR, feature_names_list_lime=feature_names, class_names_list_lime=CLASS_NAMES
         )
 
+    # 정상 샘플에 대한 LIME 분석
     if x_neg is not None and idx_neg_one is not None:
         generate_and_save_lime_explanation(
             instance_vector=x_neg, instance_idx_str=str(idx_neg_one),
@@ -441,43 +443,64 @@ if __name__ == "__main__":
         if all_top_feature_rules_global:
             feature_rule_counts = Counter(all_top_feature_rules_global)
             most_common_feature_rules = feature_rule_counts.most_common(TOP_N_FOR_GLOBAL_VISUALIZATION)
-            df_freq = pd.DataFrame(most_common_feature_rules, columns=['feature_rule', 'frequency']).sort_values(by='frequency', ascending=True)
+            df_freq = pd.DataFrame(most_common_feature_rules, columns=['feature_rule', 'frequency']).sort_values(by='frequency', ascending=False)
 
-            # 시각화: 모델이 확률을 판단할 때 반복적으로 등장하는 규칙 순위
-            plt.figure(figsize=(12, max(6, len(df_freq) * 0.4)))
-            plt.barh(df_freq['feature_rule'], df_freq['frequency'], color='skyblue')
-            plt.xlabel("Frequency in top LIME features")
-            plt.ylabel("LIME features rule")
-            plt.title(f"Top {len(df_freq)} most frequent LIME features rule\nExplaining class: {CLASS_NAMES[TARGET_CLASS_IDX_EXPLAIN]}")
+            # 시각화
+            sns.set_theme(style="whitegrid", context="talk", font_scale=0.9)
+            palette = sns.color_palette("crest", len(df_freq))
+            fig, ax = plt.subplots(figsize=(12, max(6, len(df_freq) * 0.4)))
+
+            sns.barplot(data=df_freq, x="frequency", y="feature_rule", hue="feature_rule", palette=palette, dodge=False, legend=False, ax=ax, edgecolor=".6")
+
+            ax.set_xlabel("Frequency in top LIME features")
+            ax.set_ylabel("LIME feature rule")
+            ax.set_title(
+                f"Top {len(df_freq)} most frequent LIME feature rules\n"
+                f"Explaining class: {CLASS_NAMES[TARGET_CLASS_IDX_EXPLAIN]}"
+            )
+
+            sns.despine(left=True, bottom=True)
             plt.tight_layout()
 
             freq_plot_path = RESULTS_LIME_DIR / f"lime_global_feature_freq_exp_{CLASS_NAMES[TARGET_CLASS_IDX_EXPLAIN]}.png"
-            plt.savefig(freq_plot_path)
+            fig.savefig(freq_plot_path, dpi=300, bbox_inches="tight")
             print(f"\nLIME global features frequency plot saved to: {freq_plot_path}")
-            plt.close()
+            plt.close(fig)
 
         # 모든 샘플에 대한 DataFrame을 합친 후 각 특성의 평균 절대 가중치를 계산
         if all_explanations_df_list_global:
             all_explanations_df_combined = pd.concat(all_explanations_df_list_global, ignore_index=True)
 
             if not all_explanations_df_combined.empty:
-                all_explanations_df_combined['abs_weight'] = all_explanations_df_combined['weight'].abs()
-                avg_abs_weights = all_explanations_df_combined.groupby('feature_rule')['abs_weight'].mean()
-                top_avg_abs_weights = avg_abs_weights.sort_values(ascending=False).head(TOP_N_FOR_GLOBAL_VISUALIZATION)
-                top_avg_abs_weights_sorted = top_avg_abs_weights.sort_values(ascending=True)
+                all_explanations_df_combined["abs_weight"] = all_explanations_df_combined["weight"].abs()
+                avg_abs_weights = (all_explanations_df_combined.groupby("feature_rule")["abs_weight"].mean())
 
-                plt.figure(figsize=(12, max(6, len(top_avg_abs_weights_sorted) * 0.4)))
-                plt.barh(top_avg_abs_weights_sorted.index, top_avg_abs_weights_sorted.values, color='salmon')
-                plt.xlabel("Mean absolute LIME weight")
-                plt.ylabel("LIME features rule")
-                plt.title(f"Top {len(top_avg_abs_weights_sorted)} LIME features rule by mean absolute weight\nExplaining class: {CLASS_NAMES[TARGET_CLASS_IDX_EXPLAIN]}")
+                top_avg_abs_weights = (avg_abs_weights.sort_values(ascending=False).head(TOP_N_FOR_GLOBAL_VISUALIZATION))
+
+                # 시각화
+                sns.set_theme(style="whitegrid", context="talk", font_scale=0.9)
+                palette = sns.color_palette("flare", len(top_avg_abs_weights))
+
+                fig, ax = plt.subplots(figsize=(12, max(6, len(top_avg_abs_weights) * 0.4)))
+
+                sns.barplot(x=top_avg_abs_weights.values, y=top_avg_abs_weights.index, hue=top_avg_abs_weights.index, palette=palette, dodge=False, legend=False, ax=ax, edgecolor=".6",)
+
+                ax.set_xlabel("Mean absolute LIME weight")
+                ax.set_ylabel("LIME feature rule")
+                ax.set_title(
+                    f"Top {len(top_avg_abs_weights)} LIME feature rules by mean absolute weight\n"
+                    f"Explaining class: {CLASS_NAMES[TARGET_CLASS_IDX_EXPLAIN]}"
+                )
+
+                sns.despine(left=True, bottom=True)
                 plt.tight_layout()
-                avg_weight_plot_path = RESULTS_LIME_DIR / f"lime_global_avg_abs_weight_exp_{CLASS_NAMES[TARGET_CLASS_IDX_EXPLAIN]}.png"
-                plt.savefig(avg_weight_plot_path)
-                print(f"LIME global mean absolute weight plot saved to: {avg_weight_plot_path}")
-                plt.close()
 
-                global_summary_path = RESULTS_LIME_DIR / f"lime_global_feature_summary_exp_{CLASS_NAMES[TARGET_CLASS_IDX_EXPLAIN]}.csv"
+                avg_weight_plot_path = (RESULTS_LIME_DIR / f"lime_global_avg_abs_weight_exp_{CLASS_NAMES[TARGET_CLASS_IDX_EXPLAIN]}.png")
+                fig.savefig(avg_weight_plot_path, dpi=300, bbox_inches="tight")
+                print(f"LIME global mean absolute weight plot saved to: {avg_weight_plot_path}")
+                plt.close(fig)
+
+                global_summary_path = (RESULTS_LIME_DIR / f"lime_global_feature_summary_exp_{CLASS_NAMES[TARGET_CLASS_IDX_EXPLAIN]}.csv")
                 all_explanations_df_combined.to_csv(global_summary_path, index=False)
                 print(f"LIME global features summary saved to: {global_summary_path}")
 
