@@ -62,10 +62,10 @@ The model performance is comprehensively evaluated using:
 
 | Metric | Description |
 |:-----------|:----------------|
-| **Loss** | Binary Cross-Entropy |
-| **PR-AUC** | Precision-Recall Area Under Curve |
-| **Accuracy** | Overall correctness of URL predictions |
-| **F1-Score** | Harmonic mean of precision and recall |
+| Loss | Binary Cross-Entropy |
+| PR-AUC | Precision-Recall Area Under Curve |
+| Accuracy | Overall correctness of URL predictions |
+| F1-Score | Harmonic mean of precision and recall |
 
 
 ## 6. Model Performance
