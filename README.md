@@ -80,9 +80,9 @@ Final trained model demonstrates exceptional results:
 | F1-Score   | 97.55%   |
 
 
-## 7. Model Interpretability
+## 7. Model Explainability
 
-To enhance transparency and practical utility, the model incorporates detailed interpretability techniques:
+To enhance transparency and practical utility, the model incorporates detailed explainability techniques:
 
 ### **SHAP Analysis (SHapley Additive exPlanations)**:
 ![The lowest-risk sample, prob=0 001](https://github.com/user-attachments/assets/995767a1-479a-4641-8755-0989cc47f61a)
