@@ -5,7 +5,7 @@ This repository contains a robust PyTorch-based Multilayer Perceptron model desi
 
 ## 1. Dataset
 
-- This study utilized the 'Dataset of Malicious and Benign Webpages' (Singh, AK, 2020) published on Mendeley Data. This dataset contains extracted attributes from websites that can be used for the classification of webpages as malicious or benign.
+- This study utilized the 'Dataset of Malicious and Benign Webpages' (AK Singh, 2020) published on Mendeley Data. This dataset contains extracted attributes from websites that can be used for the classification of webpages as malicious or benign.
 
 ### **Dataset Composition**:
 
